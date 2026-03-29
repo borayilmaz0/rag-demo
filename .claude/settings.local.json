@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__rag-assistant__ingest_document",
+      "Bash(ls /Users/bora/Projects/ai-related/rag/.env*)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "rag-assistant"
+  ]
+}

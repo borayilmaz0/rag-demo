@@ -1,0 +1,104 @@
+services:
+  # ── ChromaDB ─────────────────────────────────────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:0.6.3
+    container_name: rag_chromadb
+    volumes:
+      - chroma_data:/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf http://localhost:8000/api/v1/heartbeat || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - rag_net
+
+  # ── Ollama (optional – local models only) ────────────────────────────────────
+  # Start with: docker compose --profile local up
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag_ollama
+    profiles: [local]
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - rag_net
+
+  # ── Backend ───────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rag_backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+      - ./docs:/app/docs
+      - ./config.json:/app/config.json
+    environment:
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - CHUNK_SIZE=768
+      - CHUNK_OVERLAP_SIZE=192
+      - DOCS_PATH=/app/docs
+      - COLLECTION_NAME=${COLLECTION_NAME:-rag_docs}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    depends_on:
+      chromadb:
+        condition: service_healthy
+    networks:
+      - rag_net
+
+  # ── MCP server ────────────────────────────────────────────────────────────────
+  mcp:
+    build:
+      context: ./mcp
+      dockerfile: Dockerfile
+    container_name: rag_mcp
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./mcp:/app
+      - ./docs:/app/docs
+    environment:
+      - BACKEND_URL=http://backend:8080
+      - MCP_PORT=8081
+    depends_on:
+      - backend
+    networks:
+      - rag_net
+
+  # ── Frontend ──────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rag_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+      - mcp
+    networks:
+      - rag_net
+
+volumes:
+  chroma_data:
+  ollama_data:
+
+networks:
+  rag_net:
+    driver: bridge

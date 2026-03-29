@@ -1,0 +1,36 @@
+# API framework
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+
+# Vector DB client
+chromadb==0.6.3
+
+# Ollama client
+ollama==0.3.3
+
+# Tokenizer for Docling HybridChunker token counting
+transformers==4.51.0
+tokenizers==0.21.0
+
+# PDF parsing
+docling>=2.15.0
+docling-core[chunking]>=2.15.0
+
+# BM25 re-ranker
+rank-bm25==0.2.2
+
+# HTTP client
+httpx==0.27.0
+
+# Async utilities
+anyio==4.3.0
+
+# Env config
+python-dotenv==1.0.1
+
+# Numerical ops
+numpy==1.26.4
+
+# OpenAI
+openai>=1.0.0

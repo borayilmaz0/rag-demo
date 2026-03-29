@@ -1,0 +1,256 @@
+[
+  {
+    "name": "create_kb",
+    "description": "Create a named, persistent Knowledge Base backed by a dedicated ChromaDB collection. Returns a kb_id and a write_token — store the token securely, it is shown only once. Use ingest_into_kb to add documents and create_session with kb_id to query it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique name for the Knowledge Base (e.g. 'scientific_papers')."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of what this KB contains."
+        }
+      },
+      "required": ["name"]
+    }
+  },
+  {
+    "name": "list_kbs",
+    "description": "List all persistent Knowledge Bases with their kb_id, name, and description.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "ingest_into_kb",
+    "description": "Ingest a file or raw text into a persistent Knowledge Base. Requires the write_token issued when the KB was created. Documents ingested here persist across sessions and restarts.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "kb_id": {
+          "type": "string",
+          "description": "Knowledge Base ID returned by create_kb."
+        },
+        "source": {
+          "type": "string",
+          "description": "Absolute file path OR raw text content to ingest."
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title for this document."
+        },
+        "write_token": {
+          "type": "string",
+          "description": "Write token issued at KB creation time."
+        },
+        "is_file": {
+          "type": "boolean",
+          "description": "True if source is a file path, False if raw text.",
+          "default": true
+        }
+      },
+      "required": ["kb_id", "source", "title", "write_token"]
+    }
+  },
+  {
+    "name": "export_session_to_kb",
+    "description": "Promote a session's documents into a new persistent Knowledge Base. Copies all chunks and their existing embeddings — no re-processing. Returns a kb_id and write_token (shown once). Use this after ingesting documents into a session to make them permanently available.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "Session ID whose documents will be exported."
+        },
+        "name": {
+          "type": "string",
+          "description": "Unique name for the new Knowledge Base."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description."
+        }
+      },
+      "required": ["session_id", "name"]
+    }
+  },
+  {
+    "name": "create_session",
+    "description": "Create a new RAG session. Returns a session_id to use with ask, search_documents, ingest_document, and list_documents. Use mode_id='strict' to answer only from documents, 'chat' to allow the model's own knowledge too. Pass kb_ids (array) to attach one or more persistent Knowledge Bases. All attached KBs are searched automatically when answering questions.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mode_id": {
+          "type": "string",
+          "description": "Session mode: 'strict' (documents only) or 'chat' (free). Defaults to 'chat'.",
+          "enum": ["chat", "strict"],
+          "default": "chat"
+        },
+        "model_id": {
+          "type": "string",
+          "description": "Model ID to use (e.g. 'local-qwen'). Leave empty for the default."
+        },
+        "kb_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional list of Knowledge Base IDs to attach."
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "attach_kb",
+    "description": "Attach a Knowledge Base to an existing session. The KB will be searched on the next ask().",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": { "type": "string", "description": "Session ID." },
+        "kb_id": {
+          "type": "string",
+          "description": "Knowledge Base ID to attach."
+        }
+      },
+      "required": ["session_id", "kb_id"]
+    }
+  },
+  {
+    "name": "detach_kb",
+    "description": "Detach a Knowledge Base from a session. Documents in the KB are not deleted.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": { "type": "string", "description": "Session ID." },
+        "kb_id": {
+          "type": "string",
+          "description": "Knowledge Base ID to detach."
+        }
+      },
+      "required": ["session_id", "kb_id"]
+    }
+  },
+  {
+    "name": "toggle_kb",
+    "description": "Enable or disable a KB within a session without detaching it. Disabled KBs are skipped during retrieval.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": { "type": "string", "description": "Session ID." },
+        "kb_id": { "type": "string", "description": "Knowledge Base ID." },
+        "enabled": {
+          "type": "boolean",
+          "description": "True to enable, False to disable."
+        }
+      },
+      "required": ["session_id", "kb_id", "enabled"]
+    }
+  },
+  {
+    "name": "toggle_doc",
+    "description": "Enable or disable a specific document (by doc_id) within a session. Disabled docs are excluded from retrieval across all collections.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": { "type": "string", "description": "Session ID." },
+        "doc_id": { "type": "string", "description": "Document ID to toggle." },
+        "enabled": {
+          "type": "boolean",
+          "description": "True to enable, False to disable."
+        }
+      },
+      "required": ["session_id", "doc_id", "enabled"]
+    }
+  },
+  {
+    "name": "ask",
+    "description": "Ask a question through a RAG session. Retrieves relevant document chunks, injects them as context, and returns the model's answer with source citations. Requires a session_id from create_session.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "Session ID returned by create_session."
+        },
+        "message": {
+          "type": "string",
+          "description": "The question or message to send."
+        },
+        "top_k": {
+          "type": "integer",
+          "description": "Number of document chunks to retrieve as context (default 5).",
+          "default": 5
+        }
+      },
+      "required": ["session_id", "message"]
+    }
+  },
+  {
+    "name": "search_documents",
+    "description": "Search the knowledge base using hybrid semantic + BM25 retrieval. Returns raw chunks with scores and source citations. Pass a session_id to search only that session's documents; omit it to search the global knowledge base.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The natural language question or search query."
+        },
+        "session_id": {
+          "type": "string",
+          "description": "Optional session ID to scope the search to that session's documents."
+        },
+        "top_k": {
+          "type": "integer",
+          "description": "Number of chunks to return (default 5).",
+          "default": 5
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "ingest_document",
+    "description": "Ingest a document into the knowledge base. Accepts either a file path (PDF, MD, TXT) or raw text content. Pass a session_id to scope it to a session; omit to store globally.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Absolute file path OR raw text content to ingest."
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title for this document."
+        },
+        "is_file": {
+          "type": "boolean",
+          "description": "True if source is a file path, False if raw text.",
+          "default": true
+        },
+        "session_id": {
+          "type": "string",
+          "description": "Optional session ID to scope ingestion to that session."
+        }
+      },
+      "required": ["source", "title"]
+    }
+  },
+  {
+    "name": "list_documents",
+    "description": "List all documents in the knowledge base with titles, sources, and chunk counts. Pass a session_id to list only that session's documents; omit to list the global knowledge base.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string",
+          "description": "Optional session ID to list only that session's documents."
+        }
+      },
+      "required": []
+    }
+  }
+]

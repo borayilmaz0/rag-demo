@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "rag-assistant": {
+      "url": "http://localhost:8081/sse",
+      "description": "Personal knowledge base — search, ingest, and list your documents"
+    }
+  }
+}
