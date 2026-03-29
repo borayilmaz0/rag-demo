@@ -190,6 +190,61 @@ export const ask = (
     }),
   });
 
+export interface AskStreamDone {
+  sources: Source[];
+  search_enabled: boolean;
+  model_id: string;
+  mode_id: string;
+}
+
+export const askStream = async (
+  id: string,
+  message: string,
+  searchEnabled: boolean,
+  topK: number,
+  callbacks: {
+    onToken: (token: string) => void;
+    onDone: (meta: AskStreamDone) => void;
+  },
+): Promise<void> => {
+  const res = await fetch(`${BASE}/sessions/${id}/ask/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, search_enabled: searchEnabled, top_k: topK }),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+
+  const reader  = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer    = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const parts = buffer.split("\n\n");
+    buffer = parts.pop() ?? "";
+
+    for (const part of parts) {
+      if (!part.startsWith("data: ")) continue;
+      const event = JSON.parse(part.slice(6));
+      if (event.type === "token") {
+        callbacks.onToken(event.token);
+      } else if (event.type === "done") {
+        callbacks.onDone({
+          sources:        event.sources,
+          search_enabled: event.search_enabled,
+          model_id:       event.model_id,
+          mode_id:        event.mode_id,
+        });
+      } else if (event.type === "error") {
+        throw new Error(event.message);
+      }
+    }
+  }
+};
+
 // ── Documents ─────────────────────────────────────────────────────────────────
 
 export const listDocuments = (session_id: string) =>

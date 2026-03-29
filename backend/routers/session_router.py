@@ -1,4 +1,7 @@
+import json
+
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 from schemas import (
     AskRequest,
@@ -81,3 +84,17 @@ async def ask(session_id: str, req: AskRequest):
         top_k=req.top_k,
     )
     return DataResponse(data=result)
+
+
+@router.post("/{session_id}/ask/stream")
+async def ask_stream(session_id: str, req: AskRequest):
+    async def generate():
+        async for event in session_service.ask_stream(
+            session_id=session_id,
+            message=req.message,
+            search_enabled=req.search_enabled,
+            top_k=req.top_k,
+        ):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")

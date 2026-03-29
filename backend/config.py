@@ -72,10 +72,18 @@ class ModeConfig:
 
 
 @dataclass
+class RerankerConfig:
+    enabled: bool  = True
+    model:   str   = "ms-marco-MiniLM-L-12-v2"
+    top_n:   int   = 5
+
+
+@dataclass
 class AppConfig:
     models:    list[ModelConfig]
     embedding: EmbeddingConfig
-    modes:     list[ModeConfig] = field(default_factory=list)
+    modes:     list[ModeConfig]    = field(default_factory=list)
+    reranker:  RerankerConfig | None = None
 
     def get_model(self, model_id: str) -> ModelConfig | None:
         return next((m for m in self.models if m.id == model_id), None)
@@ -185,7 +193,17 @@ def load_config() -> AppConfig:
             force_search=bool(m.get("force_search", False)),
         ))
 
-    return AppConfig(models=models, embedding=embedding, modes=custom_modes)
+    # ── reranker (optional) ───────────────────────────────────────────────────
+    reranker = None
+    if raw.get("reranker"):
+        r = raw["reranker"]
+        reranker = RerankerConfig(
+            enabled=bool(r.get("enabled", True)),
+            model=r.get("model", "ms-marco-MiniLM-L-12-v2"),
+            top_n=int(r.get("top_n", 5)),
+        )
+
+    return AppConfig(models=models, embedding=embedding, modes=custom_modes, reranker=reranker)
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────

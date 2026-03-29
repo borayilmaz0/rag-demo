@@ -12,7 +12,7 @@ from prompts import Mode, register_mode
 from schemas import ErrorResponse
 
 from repositories import vector_repository, kb_repository
-from services import llm_service, search_service
+from services import llm_service, search_service, rerank_service
 
 from routers import (
     config_router,
@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
     )
     llm_service.init()
     search_service.init()
+    rerank_service.init()
 
     yield
     # Shutdown: in-memory stores need no cleanup

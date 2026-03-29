@@ -23,11 +23,12 @@ Session state shape:
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncGenerator
 
 from config import CFG
 from prompts import get_mode, build_context_block
 from schemas import ErrorResponse
-from services import llm_service, search_service
+from services import llm_service, search_service, rerank_service
 from repositories import state_repository, vector_repository, kb_repository
 
 
@@ -287,6 +288,66 @@ async def ask(
     }
 
 
+async def ask_stream(
+    session_id:     str,
+    message:        str,
+    search_enabled: bool,
+    top_k:          int,
+) -> AsyncGenerator[dict, None]:
+    """
+    Async generator that yields SSE-ready dicts:
+      {"type": "token",  "token": str}          — one per LLM token
+      {"type": "done",   "sources": [...], ...}  — final metadata
+      {"type": "error",  "message": str}         — on failure
+    """
+    session = _require_session(session_id)
+    mode    = get_mode(session["mode_id"])
+    history = session["history"]
+
+    do_search = search_enabled or mode.force_search
+    sources:  list[dict] = []
+
+    if do_search:
+        chunks = _retrieve(session, message, top_k)
+        system_prompt = f"{mode.system}\n\n{build_context_block(chunks)}"
+        sources = [
+            {
+                "title":   c["metadata"].get("title"),
+                "source":  c["metadata"].get("source"),
+                "page":    c["metadata"].get("page"),
+                "section": c["metadata"].get("section"),
+                "score":   c["score"],
+                "text":    c["text"],
+            }
+            for c in chunks
+        ]
+    else:
+        system_prompt = mode.system
+
+    full_answer = ""
+    async for token in llm_service.call_llm_stream(
+        messages=history + [{"role": "user", "content": message}],
+        system_prompt=system_prompt,
+        model_id=session["model_id"],
+    ):
+        full_answer += token
+        yield {"type": "token", "token": token}
+
+    session["history"] = history + [
+        {"role": "user",      "content": message},
+        {"role": "assistant", "content": full_answer},
+    ]
+
+    yield {
+        "type":           "done",
+        "sources":        sources,
+        "search_enabled": do_search,
+        "top_k":          top_k if do_search else 0,
+        "model_id":       session["model_id"],
+        "mode_id":        mode.id,
+    }
+
+
 def _retrieve(session: dict, query: str, top_k: int) -> list[dict]:
     """
     Retrieve from the session collection and all enabled attached KBs.
@@ -325,4 +386,8 @@ def _retrieve(session: dict, query: str, top_k: int) -> list[dict]:
                 excluded_doc_ids=disabled_doc_ids,
             )
 
-    return sorted(all_chunks, key=lambda c: c["score"], reverse=True)[:top_k]
+    merged = sorted(all_chunks, key=lambda c: c["score"], reverse=True)
+
+    from config import CFG
+    top_n = CFG.reranker.top_n if CFG.reranker else top_k
+    return rerank_service.rerank(query, merged, top_n)

@@ -8,6 +8,8 @@ Call init() once from the app lifespan.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+
 from openai import AsyncOpenAI
 
 from config import CFG
@@ -45,3 +47,27 @@ async def call_llm(
         messages=full_messages,
     )
     return response.choices[0].message.content.strip()
+
+
+async def call_llm_stream(
+    messages:      list[dict],
+    system_prompt: str,
+    model_id:      str,
+) -> AsyncGenerator[str, None]:
+    """Yield tokens one at a time as they arrive from the LLM."""
+    model_cfg = CFG.get_model(model_id)
+    if model_cfg is None:
+        raise ErrorResponse(status_code=400, detail=f"Unknown model id: '{model_id}'")
+
+    client        = _clients[model_id]
+    full_messages = [{"role": "system", "content": system_prompt}] + messages
+
+    stream = await client.chat.completions.create(
+        model=model_cfg.model,
+        messages=full_messages,
+        stream=True,
+    )
+    async for chunk in stream:
+        token = chunk.choices[0].delta.content
+        if token:
+            yield token
