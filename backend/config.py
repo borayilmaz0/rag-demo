@@ -35,6 +35,8 @@ Expected shape:
 from __future__ import annotations
 
 import json
+import os
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -118,7 +120,13 @@ def load_config() -> AppConfig:
         )
 
     try:
-        raw = json.loads(CONFIG_PATH.read_text())
+        text = CONFIG_PATH.read_text()
+        text = re.sub(
+            r"\$\{([^}]+)\}",
+            lambda m: os.environ.get(m.group(1), m.group(0)),
+            text,
+        )
+        raw = json.loads(text)
     except json.JSONDecodeError as e:
         _error(f"{CONFIG_PATH} is not valid JSON: {e}")
 

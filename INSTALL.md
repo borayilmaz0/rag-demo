@@ -12,87 +12,148 @@
 
 This file is the single source of truth for every LLM and embedding provider. The backend will refuse to start without it.
 
+### Quick setup
+
+A fully annotated example is included:
+
+```bash
+cp config.example.json config.json
+```
+
+Open `config.json` and **delete the model entries you don't need**. Every block has a `_comment` field explaining what it is — those are ignored by the backend.
+
+### Environment variable substitution
+
+Any string value in `config.json` can reference an environment variable using `${VAR}` syntax:
+
+```json
+{
+  "api_key": "${OPENAI_API_KEY}"
+}
+```
+
+The backend resolves these at startup from your `.env` file or from variables set in `docker-compose.yml`. If a variable isn't set, the placeholder is left as-is (and the backend will fail to authenticate, so make sure to set the keys you reference).
+
+This keeps secrets out of `config.json` so you can safely commit the file to version control.
+
+### Provider presets
+
+#### Local — Ollama inside Docker
+
+```json
+{
+  "id":       "local-qwen",
+  "label":    "Qwen 2.5 3B (local)",
+  "base_url": "http://ollama:11434/v1",
+  "model":    "qwen2.5:3b",
+  "api_key":  "ollama"
+}
+```
+
+Start with `docker compose --profile local up`. Pull models first — see [step 4](#4-pulling-ollama-models).
+
+#### Local — Ollama running natively on your Mac
+
+```json
+{
+  "id":       "local-qwen",
+  "label":    "Qwen 2.5 3B (local)",
+  "base_url": "http://host.docker.internal:11434/v1",
+  "model":    "qwen2.5:3b",
+  "api_key":  "ollama"
+}
+```
+
+Use `http://host.docker.internal:11434/v1` — Docker's built-in DNS name that resolves to your Mac from inside any container.
+
+#### OpenAI
+
+Add to `.env`:
+```env
+OPENAI_API_KEY=sk-...
+```
+
+```json
+{
+  "id":       "gpt-4o",
+  "label":    "GPT-4o",
+  "base_url": "https://api.openai.com/v1",
+  "model":    "gpt-4o",
+  "api_key":  "${OPENAI_API_KEY}"
+}
+```
+
+#### Anthropic
+
+Add to `.env`:
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+```json
+{
+  "id":       "claude-sonnet",
+  "label":    "Claude Sonnet",
+  "base_url": "https://api.anthropic.com",
+  "model":    "claude-sonnet-4-6",
+  "api_key":  "${ANTHROPIC_API_KEY}"
+}
+```
+
+### Multiple providers at once
+
+All configured models appear in the UI's model switcher. You can mix local and cloud freely:
+
 ```json
 {
   "models": [
     {
-      "id": "local-qwen",
-      "label": "Qwen 2.5 3B (local)",
-      "base_url": "http://ollama:11434/v1",
-      "model": "qwen2.5:3b",
-      "api_key": "ollama"
+      "id": "local-qwen", "label": "Qwen 2.5 3B (local)",
+      "base_url": "http://ollama:11434/v1", "model": "qwen2.5:3b", "api_key": "ollama"
+    },
+    {
+      "id": "gpt-4o", "label": "GPT-4o",
+      "base_url": "https://api.openai.com/v1", "model": "gpt-4o", "api_key": "${OPENAI_API_KEY}"
     }
   ],
   "embedding": {
     "base_url": "http://ollama:11434/v1",
-    "model": "nomic-embed-text",
-    "api_key": "ollama"
+    "model":    "nomic-embed-text",
+    "api_key":  "ollama"
   }
 }
 ```
 
-### Fields
+### Model fields
 
-| Field      | Required | Description                                                               |
-| ---------- | -------- | ------------------------------------------------------------------------- |
-| `id`       | yes      | Unique identifier shown in the model switcher                             |
-| `label`    | yes      | Display name in the UI                                                    |
-| `base_url` | yes      | OpenAI-compatible endpoint root (the backend appends `/v1` automatically) |
-| `model`    | yes      | Model name passed to the API (e.g. `gpt-4o`, `qwen2.5:3b`)                |
-| `api_key`  | no       | Defaults to `"ollama"`. Set to your real key for cloud providers.         |
+| Field | Required | Description |
+|---|---|---|
+| `id` | yes | Unique identifier shown in the model switcher |
+| `label` | yes | Display name in the UI |
+| `base_url` | yes | OpenAI-compatible endpoint (the backend appends `/v1` if missing) |
+| `model` | yes | Model name passed to the API (e.g. `gpt-4o`, `qwen2.5:3b`) |
+| `api_key` | no | Defaults to `"ollama"`. Use `${VAR}` for cloud keys. |
 
-### Multiple providers at once
-
-```json
-{
-  "models": [
-    {
-      "id": "local-qwen",
-      "label": "Qwen 2.5 3B (local)",
-      "base_url": "http://ollama:11434/v1",
-      "model": "qwen2.5:3b",
-      "api_key": "ollama"
-    },
-    {
-      "id": "gpt-4o",
-      "label": "GPT-4o",
-      "base_url": "https://api.openai.com/v1",
-      "model": "gpt-4o",
-      "api_key": "sk-..."
-    },
-    {
-      "id": "claude-sonnet",
-      "label": "Claude Sonnet",
-      "base_url": "https://api.anthropic.com",
-      "model": "claude-sonnet-4-6",
-      "api_key": "sk-ant-..."
-    }
-  ],
-  "embedding": {
-    "base_url": "https://api.openai.com/v1",
-    "model": "text-embedding-3-small",
-    "api_key": "sk-..."
-  }
-}
-```
-
-All configured models appear in the UI's model switcher. You can switch between them mid-conversation without losing history.
-
-> **Embedding note:** Only one embedding model is used at a time (configured in the `embedding` block). All documents ingested into a session must be embedded with the same model — changing the embedding model after ingestion will produce incorrect similarity scores.
+> **Embedding note:** Only one embedding model is active at a time. All documents in a collection must be embedded with the same model — changing the embedding model after ingestion produces incorrect similarity scores.
 
 ---
 
-## 2. Environment variables (optional)
+## 2. Set API keys (`.env`)
 
-Create a `.env` file at the project root for API keys you don't want to hardcode in `config.json`:
+Create a `.env` file at the project root for any keys referenced in `config.json`:
 
 ```env
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
-COLLECTION_NAME=rag_docs
 ```
 
-These are available inside the backend container. You can reference them in your deployment scripts, but `config.json` must still contain the actual values used by the backend.
+Docker Compose picks this file up automatically. You can also override other defaults here:
+
+```env
+COLLECTION_NAME=my_docs
+CHUNK_SIZE=768
+CHUNK_OVERLAP_SIZE=192
+```
 
 ---
 
@@ -104,7 +165,7 @@ These are available inside the backend container. You can reference them in your
 docker compose up --build
 ```
 
-Use `base_url` values that point to cloud APIs in your `config.json`.
+Point `base_url` values at cloud APIs in your `config.json`.
 
 ### Option B — With Ollama running inside Docker
 
@@ -112,7 +173,7 @@ Use `base_url` values that point to cloud APIs in your `config.json`.
 docker compose --profile local up --build
 ```
 
-The `ollama` service starts alongside the rest of the stack. Use `http://ollama:11434` as the `base_url` for local models (the internal Docker network name).
+The `ollama` service starts alongside the rest of the stack. Use `http://ollama:11434/v1` as the `base_url`.
 
 ### Option C — With Ollama running natively on your Mac
 
@@ -129,13 +190,7 @@ ollama serve
 docker compose up --build
 ```
 
-In `config.json`, point to `http://host.docker.internal:11434/v1` — this is Docker's built-in DNS name that resolves to your Mac's localhost from inside any container:
-
-```json
-{
-  "base_url": "http://host.docker.internal:11434/v1"
-}
-```
+Use `http://host.docker.internal:11434/v1` as the `base_url` in `config.json`.
 
 ---
 
@@ -154,9 +209,6 @@ docker exec -it rag_ollama ollama pull qwen2.5:7b
 
 # Embedding model (required for ingestion and search)
 docker exec -it rag_ollama ollama pull nomic-embed-text
-
-# Alternative embedding (if using qwen3-embedding in config.json)
-docker exec -it rag_ollama ollama pull qwen3-embedding:0.6b
 ```
 
 ### Native Ollama (Option C)
@@ -166,11 +218,13 @@ ollama pull qwen2.5:3b
 ollama pull nomic-embed-text
 ```
 
-### Recommended model combinations
+### Recommended combinations
 
-| Use case             | LLM          | Embedding          |
-| -------------------- | ------------ | ------------------ |
+| Use case | LLM | Embedding |
+|---|---|---|
 | Fast, local, low RAM | `qwen2.5:3b` | `nomic-embed-text` |
+| Local, higher quality | `qwen2.5:7b` | `nomic-embed-text` |
+| Cloud, best quality | `gpt-4o` | `text-embedding-3-small` |
 
 ---
 

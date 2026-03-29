@@ -1,0 +1,75 @@
+{
+  "_comment": "Copy this file to config.json and remove the blocks you don't need.",
+  "_env_vars": "String values support ${VAR} substitution from environment variables or your .env file.",
+
+  "models": [
+
+    {
+      "_comment": "── Local: Ollama running inside Docker (docker compose --profile local up) ──",
+      "id":       "local-qwen-3b",
+      "label":    "Qwen 2.5 3B (local)",
+      "base_url": "http://ollama:11434/v1",
+      "model":    "qwen2.5:3b",
+      "api_key":  "ollama"
+    },
+
+    {
+      "_comment": "── Local: Ollama running natively on your Mac (brew install ollama) ──",
+      "id":       "local-qwen-native",
+      "label":    "Qwen 2.5 3B (native Ollama)",
+      "base_url": "http://host.docker.internal:11434/v1",
+      "model":    "qwen2.5:3b",
+      "api_key":  "ollama"
+    },
+
+    {
+      "_comment": "── OpenAI ── set OPENAI_API_KEY in your .env ──",
+      "id":       "gpt-4o",
+      "label":    "GPT-4o",
+      "base_url": "https://api.openai.com/v1",
+      "model":    "gpt-4o",
+      "api_key":  "${OPENAI_API_KEY}"
+    },
+
+    {
+      "_comment": "── OpenAI (cheaper/faster) ──",
+      "id":       "gpt-4o-mini",
+      "label":    "GPT-4o Mini",
+      "base_url": "https://api.openai.com/v1",
+      "model":    "gpt-4o-mini",
+      "api_key":  "${OPENAI_API_KEY}"
+    },
+
+    {
+      "_comment": "── Anthropic ── set ANTHROPIC_API_KEY in your .env ──",
+      "id":       "claude-sonnet",
+      "label":    "Claude Sonnet",
+      "base_url": "https://api.anthropic.com",
+      "model":    "claude-sonnet-4-6",
+      "api_key":  "${ANTHROPIC_API_KEY}"
+    }
+
+  ],
+
+  "embedding": {
+    "_comment_options": [
+      "Local (Ollama inside Docker): base_url = http://ollama:11434/v1, model = nomic-embed-text, api_key = ollama",
+      "Local (native Ollama):        base_url = http://host.docker.internal:11434/v1",
+      "OpenAI:                       base_url = https://api.openai.com/v1, model = text-embedding-3-small"
+    ],
+    "base_url": "http://ollama:11434/v1",
+    "model":    "nomic-embed-text",
+    "api_key":  "ollama"
+  },
+
+  "modes": [
+    {
+      "_comment": "Optional — define custom assistant personalities. Remove this block to use only the built-in Chat and Strict modes.",
+      "id":           "legal",
+      "label":        "Legal Review",
+      "description":  "Analyses documents for legal implications",
+      "system":       "You are a legal assistant. Analyse the provided documents carefully. Always cite the specific clause or section you are referencing. Never give legal advice — only summarise what the documents say.",
+      "force_search": true
+    }
+  ]
+}
